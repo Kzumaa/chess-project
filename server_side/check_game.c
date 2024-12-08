@@ -379,9 +379,11 @@ bool validate_queen_move(wchar_t **board, int player, int x_moves, int y_moves, 
         return false;
     } else if (is_rect(move)) {
     	  if (!is_rect_clear(board, move, x_moves, y_moves))
+           send(player, "e-31", 4, 0);
             return false;
     } else {
       if (!is_diagonal(x_moves, y_moves)) {
+        send(player, "e-31", 4, 0);
       	return false;
       }
     }
