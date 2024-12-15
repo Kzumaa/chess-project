@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
         if (loggedIn == 0)
         {
             menuLogin(&sockfd);
+            // display_login_menu(&sockfd);
         }
         else if (loggedIn == 1)
         {
@@ -89,7 +90,9 @@ int main(int argc, char *argv[])
             while (1)
             {
                 bzero(buffer, 64);
-                fgets(buffer, 64, stdin);
+                // fgets(buffer, 64, stdin);
+                mvprintw(15, 15, "Enter your move: ");
+                getstr(buffer);
 
                 /* Send message to the server */
                 n = write(sockfd, buffer, strlen(buffer));
