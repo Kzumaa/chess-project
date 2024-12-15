@@ -39,7 +39,7 @@ void *game_room() {
     wchar_t **board = create_board();
     char *one_dimension_board = create_od_board();
     initialize_board(board);
-
+  while (true) {
     if (send(player_one, "i-p1", 4, 0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
@@ -134,8 +134,8 @@ void *game_room() {
             send(player_one, "w", 1, 0);
             send(player_two, "l", 1, 0);
             setLogEndGame(player_one, player_two, 1);
-            close(player_one);
-            close(player_two);
+//            close(player_one);
+//            close(player_two);
             break;
         }
         sleep(1);
@@ -208,19 +208,68 @@ void *game_room() {
             send(player_two, "w", 1, 0);
             send(player_one, "l", 1, 0);
             setLogEndGame(player_one, player_two, 2);
-            close(player_one);
-            close(player_two);
             break;
         }
         sleep(1);
     }
 
-    /* delete board */
+      bool want_rematch = false;
+
+      // Wait for responses from both players
+      char player_one_response[64] = {0};
+      char player_two_response[64] = {0};
+
+      // Clear the buffers before reading
+      memset(player_one_response, 0, sizeof(player_one_response));
+      memset(player_two_response, 0, sizeof(player_two_response));
+
+      // Read with more careful parsing
+      if (read(player_one, player_one_response, sizeof(player_one_response) - 1) < 0) {
+          perror("ERROR reading from socket");
+          exit(1);
+      }
+
+      if (read(player_two, player_two_response, sizeof(player_two_response) - 1) < 0) {
+          perror("ERROR reading from socket");
+          exit(1);
+      }
+
+      char *trimmed_p1 = strtok(player_one_response, " \n\r\t");
+      char *trimmed_p2 = strtok(player_two_response, " \n\r\t");
+
+      // Check if both players want a rematch
+      if (trimmed_p1 && trimmed_p2 &&
+          strcmp(trimmed_p1, "rematch") == 0 &&
+          strcmp(trimmed_p2, "rematch") == 0) {
+          printf("Both players want to rematch\n");
+          want_rematch = true;
+          } else {
+              printf("One or both players do not want to rematch\n");
+              send(player_one, "quit", 4, 0);
+              send(player_two, "quit", 4, 0);
+              break;  // Exit the main game loop
+          }
+
+      // If rematch is desired, reset the game state
+      if (want_rematch) {
+          // Create a new board
+          board = create_board();
+          one_dimension_board = create_od_board();
+          initialize_board(board);
+
+          // Reset game state variables
+          syntax_valid = false;
+          move_valid = false;
+
+      }
+    }
     free(move);
     free_board(board);
     close(player_one);
     close(player_two);
 }
+
+
 
 int getAllUser(int player) {
     while (1) {

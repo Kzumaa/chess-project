@@ -14,24 +14,32 @@
 int checkLogin(char *username, char *password) {
     FILE *file = fopen("user.txt", "r");
     char line[100];
+    char storedUsername[50];
+    char storedPassword[50];
 
     if (file == NULL) {
-        printf("Not Open File.\n");
+        printf("Cannot open file.\n");
         return 0;
     }
 
     while (fgets(line, sizeof(line), file) != NULL) {
-        char *storedUsername = strtok(line, " ");
-        char *storedPassword = strtok(NULL, " \n");
-        if (storedUsername != NULL && storedPassword != NULL) {
+        // Use sscanf to parse the line, which handles whitespace more robustly
+        if (sscanf(line, "%49s %49s", storedUsername, storedPassword) == 2) {
+            // Trim any potential newline characters from input
+            username[strcspn(username, "\n")] = 0;
+            password[strcspn(password, "\n")] = 0;
+            storedPassword[strcspn(storedPassword, "\n")] = 0;
+
             if (strcmp(username, storedUsername) == 0 && strcmp(password, storedPassword) == 0) {
                 fclose(file);
+                printf("Login successful.\n");
                 return 1;
             }
         }
     }
 
     fclose(file);
+    printf("Login failed: %s %s\n", username, password);
     return 0;
 }
 
