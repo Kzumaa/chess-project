@@ -31,13 +31,26 @@ void reverse_move(char *board, const char *move) {
     board[start_row * 8 + start_col] = ' ';
 }
 
+void cleanup() {
+    endwin(); // This will restore the terminal to its original state
+}
+
 int main() {
     // Initialize ncurses
     initscr();                // Start ncurses mode
+    atexit(cleanup);
     cbreak();                 // Disable line buffering
     noecho();                 // Don't echo input
     curs_set(0);              // Hide cursor
-    keypad(stdscr, TRUE);     // Enable special keys (but we're using 'a' and 'd' now)
+    // keypad(stdscr, TRUE);     // Enable special keys (but we're using 'a' and 'd' now)
+    
+    start_color();
+    init_pair(1, COLOR_WHITE, COLOR_BLACK);  // Black squares
+    init_pair(2, COLOR_BLACK, COLOR_WHITE);  // White squares
+    init_pair(5, COLOR_BLUE, COLOR_BLACK);   // White pieces on black squares
+    init_pair(6, COLOR_RED, COLOR_BLACK);    // Black pieces on black squares
+    init_pair(7, COLOR_BLUE, COLOR_WHITE);   // White pieces on white squares
+    init_pair(8, COLOR_RED, COLOR_WHITE);    // Black pieces on white squares
 
     // Initialize chessboard with the new piece IDs
     char board[64] = {

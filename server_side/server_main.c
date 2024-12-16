@@ -21,6 +21,7 @@
 
 // Match player
 int challenging_player = 0;
+int resigned = 0;
 
 void *game_room() {
     pthread_mutex_lock(&general_mutex);
@@ -39,237 +40,346 @@ void *game_room() {
     wchar_t **board = create_board();
     char *one_dimension_board = create_od_board();
     initialize_board(board);
-  while (true) {
-    if (send(player_one, "i-p1", 4, 0) < 0) {
-        perror("ERROR writing to socket");
-        exit(1);
-    }
-
-    if (send(player_two, "i-p2", 4, 0) < 0) {
-        perror("ERROR writing to socket");
-        exit(1);
-    }
-
-    sleep(1);
-
-    // Broadcast the board to all the room players
-    broadcast(board, one_dimension_board, player_one, player_two);
-
-    sleep(1);
-
-    bool syntax_valid = false;
-    bool move_valid = false;
-    setLogStart(player_one, player_two);
-
-    while (1) {
-        send(player_one, "i-tm", 4, 0);
-        send(player_two, "i-nm", 4, 0);
-
-        // Wait until syntax and move are valid
-        printf("Waiting for move from player one (%d)... sending i\n", player_one);
-
-        while (!syntax_valid || !move_valid) {
-            bzero(buffer, 64);
-
-            printf("Checking syntax and move validation (%d,%d)\n", syntax_valid, move_valid);
-            if (read(player_one, buffer, 6) < 0) {
-                perror("ERROR reading from socket");
-                exit(1);
-            }
-            printf("Player one (%d) move: %s\n", player_one, buffer);
-
-            if (buffer[0] == 'g' && buffer[1] == 'i') {
-                send(player_two, "gyes", 4, 0);
-                while (1) {
-                    bzero(buffer, 6);
-                    if (read(player_two, buffer, 4) < 0) {
-                        perror("ERROR reading from socket");
-                        exit(1);
-                    }
-                    if (buffer[0] == 'y' && buffer[1] == 'e') {
-                        send(player_one, "g-ok", 4, 0);
-                        send(player_two, "w", 1, 0);
-                        free(move);
-                        free_board(board);
-                        setLogEndGame(player_one, player_two, 2);
-                        close(player_one);
-                        close(player_two);
-                        return 0;
-                    } else if (buffer[0] == 'n' && buffer[1] == 'o') {
-                        send(player_one, "g-no", 4, 0);
-                        break;
-                    }
-                }
-            } else if (buffer[0] == 0 && buffer[1] == 0) {
-                send(player_two, "b", 1, 0);
-                free(move);
-                free_board(board);
-                setLogEndGame(player_one, player_two, 2);
-                close(player_one);
-                close(player_two);
-                return 0;
-            } else if (buffer[0] == '\n') {
-                continue;
-            } else {
-                syntax_valid = is_syntax_valid(player_one, buffer);
-                translate_to_move(move, buffer);  // Convert to move
-                // TODO
-                move_valid = is_move_valid(board, player_one, 1, move);
-                setLogOnGame(player_one, player_two, buffer, 1);
-            }
+    while (true) {
+        if (send(player_one, "i-p1", 4, 0) < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
         }
 
-        printf("Player one (%d) made move\n", player_one);
-
-        syntax_valid = false;
-        move_valid = false;
-        // Apply move to board
-        move_piece(board, move);
-        sleep(0.5);
-
-        // Send applied move board
-        broadcast(board, one_dimension_board, player_one, player_two);
-
-        if (check_end_game(board)) {
-            send(player_one, "w", 1, 0);
-            send(player_two, "l", 1, 0);
-            setLogEndGame(player_one, player_two, 1);
-//            close(player_one);
-//            close(player_two);
-            break;
+        if (send(player_two, "i-p2", 4, 0) < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
         }
+
         sleep(1);
-        send(player_one, "i-nm", 4, 0);
-        send(player_two, "i-tm", 4, 0);
 
-        printf("Waiting for move from player two (%d)\n", player_two);
-
-        while (!syntax_valid || !move_valid) {
-            bzero(buffer, 64);
-            if (read(player_two, buffer, 6) < 0) {
-                perror("ERROR reading from socket");
-                exit(1);
-            }
-
-            printf("Player two (%d) move: %s\n", player_two, buffer);
-
-            if (buffer[0] == '\n') {
-                continue;
-            } else if (buffer[0] == 'g' && buffer[1] == 'i') {
-                send(player_one, "gyes", 4, 0);
-                while (1) {
-                    bzero(buffer, 6);
-                    if (read(player_one, buffer, 4) < 0) {
-                        perror("ERROR reading from socket");
-                        exit(1);
-                    }
-                    if (buffer[0] == 'y' && buffer[1] == 'e') {
-                        send(player_two, "g-ok", 4, 0);
-                        send(player_one, "w", 1, 0);
-                        free(move);
-                        free_board(board);
-                        setLogEndGame(player_one, player_two, 2);
-                        close(player_one);
-                        close(player_two);
-                        return 0;
-                    } else if (buffer[0] == 'n' && buffer[1] == 'o') {
-                        send(player_two, "g-no", 4, 0);
-                        break;
-                    }
-                }
-            } else if (buffer[0] == 0 && buffer[1] == 0) {
-                send(player_one, "b", 1, 0);
-                free(move);
-                free_board(board);
-                setLogEndGame(player_one, player_two, 2);
-                close(player_one);
-                close(player_two);
-                return 0;
-            } else {
-                syntax_valid = is_syntax_valid(player_two, buffer);
-                translate_to_move(move, buffer);  // Convert to move
-                move_valid = is_move_valid(board, player_two, -1, move);
-                setLogOnGame(player_one, player_two, buffer, 2);
-            }
-        }
-        printf("Player two (%d) made move\n", player_two);
-
-        syntax_valid = false;
-        move_valid = false;
-
-        // Apply move to board
-        move_piece(board, move);
-        sleep(0.5);
-
-        // Send applied move board
+        // Broadcast the board to all the room players
         broadcast(board, one_dimension_board, player_one, player_two);
 
-        if (check_end_game(board)) {
-            send(player_two, "w", 1, 0);
+        sleep(1);
+
+        bool syntax_valid = false;
+        bool move_valid = false;
+        setLogStart(player_one, player_two);
+        while (1) {
+            send(player_one, "i-tm", 4, 0);
+            send(player_two, "i-nm", 4, 0);
+            if (resigned == 1) {
+                break;
+            }
+            // Wait until syntax and move are valid
+            printf("Waiting for move from player one (%d)... sending i\n", player_one);
+
+            while (!syntax_valid || !move_valid) {
+                bzero(buffer, 64);
+                if (resigned == 1) {
+                    break;
+                }
+                printf("Checking syntax and move validation (%d,%d)\n", syntax_valid, move_valid);
+                if (read(player_one, buffer, 6) < 0) {
+                    perror("ERROR reading from socket");
+                    exit(1);
+                }
+                printf("Player one (%d) move: %s\n", player_one, buffer);
+                if (strcmp(buffer, "resign") == 0) {
+                    resigned = 1;
+                    remove_p1_king(board);
+                    send(player_two, "w", 1, 0);
+                    send(player_one, "l", 1, 0);
+                    setLogEndGame(player_one, player_two, 1);
+                    break;
+                }
+                if (strcmp(buffer, "e1-g1") == 0) {
+                    handle_castle(board);
+                    broadcast(board, one_dimension_board, player_one, player_two);
+                    bzero(buffer, 10);
+                    break;
+                }
+
+                if (buffer[0] == 'g' && buffer[1] == 'i') {
+                    send(player_two, "gyes", 4, 0);
+                    while (1) {
+                        bzero(buffer, 6);
+                        if (read(player_two, buffer, 4) < 0) {
+                            perror("ERROR reading from socket");
+                            exit(1);
+                        }
+                        if (strcmp(buffer, "resign") == 0) {
+                            resigned = 1;
+                            remove_p2_king(board);
+                            send(player_two, "l", 1, 0);
+                            send(player_one, "w", 1, 0);
+                            setLogEndGame(player_one, player_two, 1);
+                            break;
+                        }
+                        if (strcmp(buffer, "e1-g1") == 0) {
+                            handle_castle(board);
+                            broadcast(board, one_dimension_board, player_one, player_two);
+                            break;
+                        }
+                        if (buffer[0] == 'y' && buffer[1] == 'e') {
+                            send(player_one, "g-ok", 4, 0);
+                            send(player_two, "w", 1, 0);
+                            free(move);
+                            free_board(board);
+                            setLogEndGame(player_one, player_two, 2);
+                            close(player_one);
+                            close(player_two);
+                            return 0;
+                        } else if (buffer[0] == 'n' && buffer[1] == 'o') {
+                            send(player_one, "g-no", 4, 0);
+                            break;
+                        }
+                    }
+                } else if (buffer[0] == 0 && buffer[1] == 0) {
+                    send(player_two, "b", 1, 0);
+                    free(move);
+                    free_board(board);
+                    setLogEndGame(player_one, player_two, 2);
+                    close(player_one);
+                    close(player_two);
+                    return 0;
+                } else if (buffer[0] == '\n') {
+                    continue;
+                } else {
+                    syntax_valid = is_syntax_valid(player_one, buffer);
+
+                    translate_to_move(move, buffer);  // Convert to move
+                    // TODO
+                    move_valid = is_move_valid(board, player_one, 1, move);
+                    setLogOnGame(player_one, player_two, buffer, 1);
+                }
+            }
+            if (strcmp(buffer, "resign") == 0) {
+                resigned = 1;
+                remove_p1_king(board);
+                send(player_two, "w", 1, 0);
+                send(player_one, "l", 1, 0);
+                setLogEndGame(player_one, player_two, 1);
+                break;
+            }
+            if (strcmp(buffer, "e1-g1") == 0) {
+                handle_castle(board);
+                broadcast(board, one_dimension_board, player_one, player_two);
+                break;
+            }
+            if(resigned == 1){
+                break;
+            }
+            printf("Player one (%d) made move\n", player_one);
+
+            syntax_valid = false;
+            move_valid = false;
+            // Apply move to board
+            if(resigned == 0) move_piece(board, move);
+            sleep(0.5);
+
+            // Send applied move board
+            if(resigned == 0) broadcast(board, one_dimension_board, player_one, player_two);
+
+            if (check_end_game(board)) {
+                send(player_one, "w", 1, 0);
+                send(player_two, "l", 1, 0);
+                setLogEndGame(player_one, player_two, 1);
+                //            close(player_one);
+                //            close(player_two);
+                break;
+            }
+            sleep(1);
+            if(resigned == 0) send(player_one, "i-nm", 4, 0);
+            if(resigned == 0) send(player_two, "i-tm", 4, 0);
+            if (strcmp(buffer, "resign") == 0) {
+                resigned = 1;
+                remove_p2_king(board);
+                send(player_two, "w", 1, 0);
+                send(player_one, "l", 1, 0);
+                setLogEndGame(player_one, player_two, 1);
+                break;
+            }
+            if (strcmp(buffer, "e1-g1") == 0) {
+                handle_castle(board);
+                broadcast(board, one_dimension_board, player_one, player_two);
+                break;
+            }
+            if(resigned == 1){
+                break;
+            }
+            printf("Waiting for move from player two (%d)\n", player_two);
+            
+            while (!syntax_valid || !move_valid) {
+                if(resigned == 1){
+                    break;
+                }
+                bzero(buffer, 64);
+                if (read(player_two, buffer, 6) < 0) {
+                    perror("ERROR reading from socket");
+                    exit(1);
+                }
+                if (strcmp(buffer, "resign") == 0) {
+                    resigned = 1;
+                    remove_p2_king(board);
+                    send(player_two, "l", 1, 0);
+                    send(player_one, "w", 1, 0);
+                    setLogEndGame(player_one, player_two, 1);
+                    break;
+                }
+                if (strcmp(buffer, "e1-g1") == 0) {
+                    handle_castle(board);
+                    broadcast(board, one_dimension_board, player_one, player_two);
+                    break;
+                }
+
+                printf("Player two (%d) move: %s\n", player_two, buffer);
+
+                if (buffer[0] == '\n') {
+                    continue;
+                } else if (buffer[0] == 'g' && buffer[1] == 'i') {
+                    send(player_one, "gyes", 4, 0);
+                    while (1) {
+                        bzero(buffer, 6);
+                        if (read(player_one, buffer, 4) < 0) {
+                            perror("ERROR reading from socket");
+                            exit(1);
+                        }
+                        if (strcmp(buffer, "resign") == 0) {
+                            resigned = 1;
+                            remove_p1_king(board);
+                            send(player_two, "w", 1, 0);
+                            send(player_one, "l", 1, 0);
+                            setLogEndGame(player_one, player_two, 1);
+                            break;
+                        }
+                        if (strcmp(buffer, "e1-g1") == 0) {
+                            handle_castle(board);
+                            broadcast(board, one_dimension_board, player_one, player_two);
+                            break;
+                        }
+
+                        if (buffer[0] == 'y' && buffer[1] == 'e') {
+                            send(player_two, "g-ok", 4, 0);
+                            send(player_one, "w", 1, 0);
+                            free(move);
+                            free_board(board);
+                            setLogEndGame(player_one, player_two, 2);
+                            close(player_one);
+                            close(player_two);
+                            return 0;
+                        } else if (buffer[0] == 'n' && buffer[1] == 'o') {
+                            send(player_two, "g-no", 4, 0);
+                            break;
+                        }
+                    }
+                } else if (buffer[0] == 0 && buffer[1] == 0) {
+                    send(player_one, "b", 1, 0);
+                    free(move);
+                    free_board(board);
+                    setLogEndGame(player_one, player_two, 2);
+                    close(player_one);
+                    close(player_two);
+                    return 0;
+                } else {
+                    syntax_valid = is_syntax_valid(player_two, buffer);
+                    translate_to_move(move, buffer);  // Convert to move
+                    move_valid = is_move_valid(board, player_two, -1, move);
+                    setLogOnGame(player_one, player_two, buffer, 2);
+                }
+            }
+            if (strcmp(buffer, "resign") == 0) {
+                resigned = 1;
+                remove_p2_king(board);
+                send(player_two, "l", 1, 0);
+                send(player_one, "w", 1, 0);
+                setLogEndGame(player_one, player_two, 1);
+                break;
+            }
+            if (strcmp(buffer, "e1-g1") == 0) {
+                handle_castle(board);
+                broadcast(board, one_dimension_board, player_one, player_two);
+                break;
+            }
+            if(resigned == 1){
+                break;
+            }
+            printf("Player two (%d) made move\n", player_two);
+
+            syntax_valid = false;
+            move_valid = false;
+
+            // Apply move to board
+            if(resigned == 0) move_piece(board, move);
+            sleep(0.5);
+
+            // Send applied move board
+            if(resigned == 0) broadcast(board, one_dimension_board, player_one, player_two);
+
+            if (check_end_game(board)) {
+                send(player_two, "w", 1, 0);
+                send(player_one, "l", 1, 0);
+                setLogEndGame(player_one, player_two, 2);
+                break;
+            }
+            sleep(1);
+        }
+
+        if(resigned == 1){
             send(player_one, "l", 1, 0);
-            setLogEndGame(player_one, player_two, 2);
             break;
         }
-        sleep(1);
-    }
 
-      bool want_rematch = false;
+        bool want_rematch = false;
 
-      // Wait for responses from both players
-      char player_one_response[64] = {0};
-      char player_two_response[64] = {0};
+        // Wait for responses from both players
+        char player_one_response[64] = {0};
+        char player_two_response[64] = {0};
 
-      // Clear the buffers before reading
-      memset(player_one_response, 0, sizeof(player_one_response));
-      memset(player_two_response, 0, sizeof(player_two_response));
+        // Clear the buffers before reading
+        memset(player_one_response, 0, sizeof(player_one_response));
+        memset(player_two_response, 0, sizeof(player_two_response));
 
-      // Read with more careful parsing
-      if (read(player_one, player_one_response, sizeof(player_one_response) - 1) < 0) {
-          perror("ERROR reading from socket");
-          exit(1);
-      }
+        // Read with more careful parsing
+        if (read(player_one, player_one_response, sizeof(player_one_response) - 1) < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
 
-      if (read(player_two, player_two_response, sizeof(player_two_response) - 1) < 0) {
-          perror("ERROR reading from socket");
-          exit(1);
-      }
+        if (read(player_two, player_two_response, sizeof(player_two_response) - 1) < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
 
-      char *trimmed_p1 = strtok(player_one_response, " \n\r\t");
-      char *trimmed_p2 = strtok(player_two_response, " \n\r\t");
+        char *trimmed_p1 = strtok(player_one_response, " \n\r\t");
+        char *trimmed_p2 = strtok(player_two_response, " \n\r\t");
 
-      // Check if both players want a rematch
-      if (trimmed_p1 && trimmed_p2 &&
-          strcmp(trimmed_p1, "rematch") == 0 &&
-          strcmp(trimmed_p2, "rematch") == 0) {
-          printf("Both players want to rematch\n");
-          want_rematch = true;
-          } else {
-              printf("One or both players do not want to rematch\n");
-              send(player_one, "quit", 4, 0);
-              send(player_two, "quit", 4, 0);
-              break;  // Exit the main game loop
-          }
+        // Check if both players want a rematch
+        if (trimmed_p1 && trimmed_p2 &&
+            strcmp(trimmed_p1, "rematch") == 0 &&
+            strcmp(trimmed_p2, "rematch") == 0) {
+            printf("Both players want to rematch\n");
+            want_rematch = true;
+        } else {
+            printf("One or both players do not want to rematch\n");
+            send(player_one, "quit", 4, 0);
+            send(player_two, "quit", 4, 0);
+            break;  // Exit the main game loop
+        }
 
-      // If rematch is desired, reset the game state
-      if (want_rematch) {
-          // Create a new board
-          board = create_board();
-          one_dimension_board = create_od_board();
-          initialize_board(board);
+        // If rematch is desired, reset the game state
+        if (want_rematch) {
+            // Create a new board
+            board = create_board();
+            one_dimension_board = create_od_board();
+            initialize_board(board);
 
-          // Reset game state variables
-          syntax_valid = false;
-          move_valid = false;
-
-      }
+            // Reset game state variables
+            syntax_valid = false;
+            move_valid = false;
+        }
     }
     free(move);
     free_board(board);
     close(player_one);
     close(player_two);
 }
-
-
 
 int getAllUser(int player) {
     while (1) {
@@ -354,7 +464,6 @@ int getAllUser(int player) {
         }
     }
 }
-
 
 void *user(void *client_socket) {
     int player = *(int *)client_socket;

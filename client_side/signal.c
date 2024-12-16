@@ -67,6 +67,7 @@ void handle_informative_message(char *buffer, int *player) {
     if (buffer[2] == 'n') {
         mvprintw(15, 15, "\nWaiting for opponent...\n");
     }
+    refresh();
     // mvprintw(15,15, "INFORMATIVE");
 }
 
@@ -75,26 +76,35 @@ void handle_error_message(char *buffer) {
         print_error_message(buffer[3]);
     }
     mvprintw(15, 15, "\nerror %s\n", buffer);
+    refresh();
 }
 
-void handle_game_end(char *buffer) {
+void handle_game_end(char *buffer, void *sockfd) {
+    int socket = *(int *)sockfd;
     if (buffer[0] == 'w') {
-        mvprintw(15, 15, "You win\n");
-        exit(1);
+        clear();
+        mvprintw(0, 0, "You win\n");
+        refresh();
+        write(socket, "rematch", 8);
+        // exit(1);
     } else if (buffer[0] == 'l') {
-        mvprintw(15, 15, "You lose\n");
-        exit(1);
+        clear();
+        mvprintw(0, 0, "You lose\n");
+        refresh();
+        write(socket, "rematch", 8);
+        // exit(1);
     } else if (buffer[0] == 'b') {
         mvprintw(15, 15, "Your opponent has left the room. Please leave here\n");
-        exit(1);
+        // exit(1);
     } else if (buffer[0] == 'g' && buffer[2] == 'e') {
         mvprintw(15, 15, "The opponent surrendered. Yes or No\n");
     } else if (buffer[0] == 'g' && buffer[2] == 'o') {
         mvprintw(15, 15, "You lose\n");
-        exit(1);
+        // exit(1);
     } else if (buffer[0] == 'g' && buffer[2] == 'n') {
         mvprintw(15, 15, "The opponent refused. Let's move\n");
     }
+    refresh();
 }
 
 void handle_board(char *buffer, int player) {
@@ -106,7 +116,8 @@ void handle_board(char *buffer, int player) {
         print_board_buff_inverted(buffer);
     }
     // mvprintw(15, 15, "RENDERED BOARD\n");
-    mvprintw(22, 60, "BOARD");
+    // mvprintw(22, 60, "BOARD");
+    refresh();
     // refresh();
 }
 
@@ -140,9 +151,12 @@ void *on_signal(void *sockfd) {
     while (1) {
         bzero(buffer, 64);
         n = read(socket, buffer, 64);
-
+        if(strcmp(buffer, "quit") == 0){
+            endwin();
+            exit(0);
+        }
         // clear();
-        mvprintw(15, 15, "BUFFER: %s\n", buffer);
+        // mvprintw(15, 15, "Enter your chess-move:\n");
 
         if (n < 0) {
             perror("ERROR reading from socket");
@@ -161,12 +175,12 @@ void *on_signal(void *sockfd) {
         // // Get chess move input from keyboard
 
         // // Handle error messages
-        if (buffer[0] == 'e') {
+        if (buffer[0] == 'e' && strcmp(buffer, "resign") != 0) {
             handle_error_message(buffer);
         }
 
         // Handle game ending scenarios
-        handle_game_end(buffer);
+        handle_game_end(buffer, sockfd);
 
         // Handle board display
 

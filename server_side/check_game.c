@@ -46,6 +46,37 @@ void move_piece(wchar_t **board, int *move) {
     board[*move][move[1]] = 0;
 }
 
+void remove_p1_king(wchar_t **board){
+    for(int i = 0; i < 8; i++){
+        for(int j = 0; j < 8; j++){
+            if(board[i][j] == white_king){
+                board[i][j] = 0;
+            }
+        }
+    }
+}
+
+void remove_p2_king(wchar_t **board){
+    for(int i = 0; i < 8; i++){
+        for(int j = 0; j < 8; j++){
+            if(board[i][j] == black_king){
+                board[i][j] = 0;
+            }
+        }
+    }
+}
+
+void handle_castle(wchar_t **board){
+    //move king from e8 to g8
+    board[7][6] = black_king;
+    board[7][4] = 0;
+    //move rook from h8 to f8
+    board[7][5] = black_rook;
+    board[7][7] = 0;
+}
+
+
+
 void freeAll(int *piece_team, int *x_moves, int *y_moves) {
     free(piece_team);
     free(x_moves);

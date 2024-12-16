@@ -155,6 +155,7 @@ char get_char_piece(char piece) {
 // }
 
 void print_board_buff(char *board){
+    setlocale(LC_ALL, "en_US.UTF-8");
     int start_x = 4, start_y = 2;
     int tile_width = 3, tile_height = 1;
 
@@ -219,7 +220,7 @@ void print_board_buff(char *board){
                 }
             }
 
-            mvprintw(y, x, "%c", get_char_piece(piece));
+            mvprintw(y, x, "%lc", translate_piece(piece));
             if ((i+j) % 2 == 0){
                 if(WHITE_PIECE){
                     attroff(COLOR_PAIR(5));
@@ -235,7 +236,7 @@ void print_board_buff(char *board){
             }
         }
     }
-
+    mvprintw(15, 2, "Enter move: ");
     // Refresh the screen and wait for user input to exit
     refresh();
 }

@@ -2,6 +2,9 @@
 #define CHECK_GAME_H
 
 bool is_diagonal(int, int);
+void remove_p1_king(wchar_t **board);
+void remove_p2_king(wchar_t **board);
+void handle_castle(wchar_t **board);
 void move_piece(wchar_t **board, int *move);
 void freeAll(int *piece_team, int *x_moves, int *y_moves);
 bool emit(int client, char *message, int message_size);

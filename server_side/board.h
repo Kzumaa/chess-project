@@ -18,4 +18,5 @@ wchar_t translate_piece (char char_piece);
 void print_board_buff(char * board);
 void print_board_buff_inverted(char * board);
 
+
 #endif // BOARD_H
